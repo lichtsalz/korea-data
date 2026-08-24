@@ -1,6 +1,6 @@
 {
   "name": "korea-data-mcp",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "MCP server for Korean company data — identity, registration status and month-by-month employment from government payroll records.",
   "keywords": [
     "mcp",
@@ -38,5 +38,6 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "mcpName": "io.github.lichtsalz/korea-data"
 }
