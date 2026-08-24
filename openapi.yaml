@@ -1,0 +1,173 @@
+openapi: 3.1.0
+info:
+  title: Korea Company Data API
+  version: 0.0.1
+  description: |
+    Korean corporate identity and employment records, in English.
+
+    **v0 is unstable.** Paths, parameters and field names may change without notice
+    until v1. Pin nothing you cannot change.
+
+    **Every endpoint costs credits.** Sign up to receive free credits to try it.
+
+    Every value carries its source and the date it was observed. Figures are
+    government records, not estimates. This API states facts and their sources;
+    it makes no assessment of any company.
+
+    **Coverage** — 152,368 Korean for-profit corporate headquarters with 10 or more
+    employees, identified through employment-insurance workplace records as of 2025-12-31.
+  license:
+    name: Proprietary
+servers:
+  - url: https://notonlystock.com/korea/api/v0
+security:
+  - bearerAuth: []
+paths:
+  /companies/{brn}:
+    get:
+      summary: Company record
+      description: Costs 1 credit. Identity, status, industry, address, latest employee counts.
+      parameters: [{ $ref: "#/components/parameters/Brn" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Company" } } } }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /companies/{brn}/employment:
+    get:
+      summary: Monthly employment series
+      description: |
+        Costs 5 credits. Month-by-month National Pension subscriber counts with
+        hires and separations. Subscriber counts are payroll records; they exclude
+        subscribers aged 60 and over and include registered directors, so they differ
+        from the Employment Insurance figure by design.
+      parameters: [{ $ref: "#/components/parameters/Brn" }]
+      responses:
+        "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EmploymentSeries" } } } }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "404": { $ref: "#/components/responses/NotFound" }
+  /companies/{brn}/worksites:
+    get:
+      summary: Worksite list
+      description: Costs 3 credits. Registered worksites with addresses and per-site employee counts.
+      parameters: [{ $ref: "#/components/parameters/Brn" }]
+      responses:
+        "200": { description: OK }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "404": { description: This company has one registered worksite }
+  /search:
+    get:
+      summary: Find companies
+      description: >
+        Returns full company records matching the filters, ordered by employees.
+        **1 credit per row returned** — `limit` controls the bill. Use `count_only=true`
+        to see how many match for 1 credit, before pulling rows. Filters combine with AND;
+        an unknown value returns 400 rather than an empty result.
+      parameters:
+        - { name: name, in: query, description: "English, romanized or Korean. The legal form (주식회사 / Co., Ltd.) is ignored.", schema: { type: string, minLength: 2 } }
+        - { name: brn, in: query, schema: { type: string, pattern: "^\\d{10}$" } }
+        - { name: industry, in: query, description: "KSIC code by prefix. 26 = division, 26299 = exact class.", schema: { type: string, pattern: "^\\d{1,5}$" } }
+        - { name: region, in: query, description: "Province (sido) or city/district (sigungu).", schema: { type: string } }
+        - { name: size, in: query, schema: { type: string, enum: ["10-49", "50-99", "100-299", "300-999", "1000+"] } }
+        - { name: status, in: query, schema: { type: string, enum: [active, suspended, closed] } }
+        - { name: established_from, in: query, schema: { type: string, pattern: "^\\d{4}$" } }
+        - { name: established_to, in: query, schema: { type: string, pattern: "^\\d{4}$" } }
+        - { name: has, in: query, description: "Comma-separated: pension_series, crno, contact, listed.", schema: { type: string } }
+        - { name: limit, in: query, description: "Rows to return. Each row costs 1 credit.", schema: { type: integer, default: 10, maximum: 10000 } }
+        - { name: count_only, in: query, description: "Return only the match count. Costs 1 credit.", schema: { type: boolean } }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  returned: { type: integer }
+                  total: { type: integer, description: "Only when count_only=true." }
+                  results: { type: array, items: { $ref: "#/components/schemas/Company" } }
+                  credits_spent: { type: integer }
+                  credits_remaining: { type: integer }
+        "400": { description: "Unknown filter value. The message names what is accepted." }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+  /me:
+    get:
+      summary: Credit balance
+      responses:
+        "200": { description: OK }
+components:
+  securitySchemes:
+    bearerAuth: { type: http, scheme: bearer, description: "API key. `Authorization: Bearer kcid_…`" }
+  parameters:
+    Brn:
+      name: brn
+      in: path
+      required: true
+      description: 10-digit business registration number
+      schema: { type: string, pattern: "^\\d{10}$" }
+  responses:
+    NotFound:
+      description: No record for this business registration number
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    InsufficientCredits:
+      description: Not enough credits
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code: { type: string }
+            message: { type: string }
+    Company:
+      type: object
+      properties:
+        brn: { type: string, description: Business registration number }
+        name_ko: { type: string }
+        name_en: { type: string }
+        name_en_class:
+          type: string
+          enum: [official, generated]
+          description: |
+            `official` — registered English name from the Financial Services Commission.
+            `generated` — romanized from Korean by rule. Not an officially registered name.
+        corporate_registration_no: { type: string }
+        business_status: { type: string, description: From the National Tax Service }
+        established_date: { type: string, format: date }
+        established_date_source:
+          type: string
+          enum: [fsc_estb, insurance_inception]
+          description: |
+            `fsc_estb` — incorporation date. `insurance_inception` — date the company
+            first enrolled in employment insurance. These are different facts.
+        ksic_code: { type: string }
+        ksic_name_en: { type: string, description: Statistics Korea KSIC 11th, official English }
+        address_en: { type: string, description: Rendered to the Korean government English format }
+        ei_workers: { type: integer, description: Employment Insurance, annual }
+        nps_latest: { type: integer, description: National Pension subscribers }
+        nps_period: { type: string, description: Observation month of nps_latest }
+        nps_quality:
+          type: string
+          enum: [clean, review, contaminated, unknown]
+          description: |
+            Aggregation quality when a company has several worksites. `clean` means no
+            sign of over-collection; it is not a verification.
+        sources: { type: object, additionalProperties: { type: string } }
+        disclaimer: { type: string }
+    EmploymentSeries:
+      type: object
+      properties:
+        brn: { type: string }
+        source: { type: string }
+        observed_periods: { type: integer }
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              period: { type: string }
+              subscribers: { type: integer }
+              new_acquisitions: { type: integer }
+              separations: { type: integer }
+              worksites_matched: { type: integer }
+              worksites_total: { type: integer }

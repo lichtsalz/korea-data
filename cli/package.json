@@ -1,0 +1,42 @@
+{
+  "name": "korea-data",
+  "version": "0.1.1",
+  "description": "Korean company data in English from the command line — identity, registration status and payroll-based employment.",
+  "keywords": [
+    "korea",
+    "korean",
+    "company",
+    "brn",
+    "business-registration-number",
+    "kyc",
+    "supplier",
+    "cli",
+    "open-data"
+  ],
+  "homepage": "https://notonlystock.com/korea/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lichtsalz/korea-data.git",
+    "directory": "cli"
+  },
+  "bugs": {
+    "url": "https://github.com/lichtsalz/korea-data/issues"
+  },
+  "license": "MIT",
+  "author": "lichtsalz",
+  "type": "module",
+  "bin": {
+    "korea": "bin/cli.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

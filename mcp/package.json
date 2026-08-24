@@ -1,0 +1,42 @@
+{
+  "name": "korea-data-mcp",
+  "version": "0.1.1",
+  "description": "MCP server for Korean company data — identity, registration status and month-by-month employment from government payroll records.",
+  "keywords": [
+    "mcp",
+    "modelcontextprotocol",
+    "korea",
+    "korean",
+    "company",
+    "brn",
+    "supplier",
+    "diligence",
+    "open-data"
+  ],
+  "homepage": "https://notonlystock.com/korea/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lichtsalz/korea-data.git",
+    "directory": "mcp"
+  },
+  "bugs": {
+    "url": "https://github.com/lichtsalz/korea-data/issues"
+  },
+  "license": "MIT",
+  "author": "lichtsalz",
+  "type": "module",
+  "bin": {
+    "korea-data-mcp": "bin/server.js"
+  },
+  "files": [
+    "bin/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
