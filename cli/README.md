@@ -16,7 +16,11 @@ $ npx korea-data brn 124-81-00998
   Address        129, Samseong-ro, Yeongtong-gu, Suwon-si, Gyeonggi-do
   Employees      160,917  Employment Insurance
                  125,592  National Pension, 2026-07
-  Worksites      14
+  Worksites      7  addresses
+                 128,093  129, Samseong-ro, Yeongtong-gu, Suwon-si, Gyeonggi-do
+                  26,541  1, Samseong-ro, Giheung-gu, Yongin-si, Gyeonggi-do
+                   4,954  158, Baebang-ro, Baebang-eup, Asan-si, Chungcheongnam-do
+                 … 4 more
 ```
 
 Find companies by filter:
@@ -29,7 +33,7 @@ $ npx korea-data search --industry 26 --size 1000+ --has listed
   107-86-14075  LG ELECTRONICS INC.                37,146
 ```
 
-Count before you pull — **1 credit regardless of how many match**:
+Count before you pull — **100 credits regardless of how many match**:
 
 ```console
 $ npx korea-data search --industry 26 --count-only
@@ -56,7 +60,7 @@ An unknown value is an error naming what is accepted — **a typo never looks li
 ## Setup
 
 Get a key at **https://notonlystock.com/korea/account** — new accounts start with
-50 free credits, no card.
+5,000 free credits, no card.
 
 ```console
 $ export KCID_API_KEY=kcid_...
@@ -74,7 +78,7 @@ assessment of any company. [What is in the data →](https://notonlystock.com/ko
 
 ## Cost
 
-1 credit per company, 1 per search row, 1 for a count.
+100 credits per company, 100 per search row, 100 for a count, 1,000 for an employment series.
 [Pricing →](https://notonlystock.com/korea/pricing)
 
 Also: **MCP server** for agents — [`korea-data-mcp`](https://www.npmjs.com/package/korea-data-mcp)

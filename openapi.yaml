@@ -8,13 +8,20 @@ info:
     **v0 is unstable.** Paths, parameters and field names may change without notice
     until v1. Pin nothing you cannot change.
 
-    **Every endpoint costs credits.** Sign up to receive free credits to try it.
+    **Most endpoints cost credits.** `/me` and `/addresses` are free. New accounts
+    receive free credits, good for 14 days; purchased credits do not expire.
 
-    Every value carries its source and the date it was observed. Figures are
-    government records, not estimates. This API states facts and their sources;
-    it makes no assessment of any company.
+    **Calls that spend credits are not rate limited** — your credits are the limit.
+    Calls that spend nothing are capped at 1,000 a day per key and return
+    `429 free_call_cap` past that.
 
-    **Coverage** — 152,368 Korean for-profit corporate headquarters with 10 or more
+    Figures are government records as of the dates shown, not estimates. This API
+    states facts; it makes no assessment of any company. Where a value could be read
+    as more than it is, a companion field says what kind of value it is —
+    `name_en_class`, `established_date_source`, `nps_quality`. Which source each field
+    comes from is listed in the [data guide](https://notonlystock.com/korea/data).
+
+    **Coverage** — 152,367 Korean for-profit corporate headquarters with 10 or more
     employees, identified through employment-insurance workplace records as of 2025-12-31.
   license:
     name: Proprietary
@@ -26,7 +33,10 @@ paths:
   /companies/{brn}:
     get:
       summary: Company record
-      description: Costs 1 credit. Identity, status, industry, address, latest employee counts.
+      description: >
+        Costs 100 credits. Identity, status, industry, address, latest employee counts, and
+        every worksite address with its own headcount (`sites`). There is no separate
+        worksite call — it was removed on 2026-08-25 and folded into this record.
       parameters: [{ $ref: "#/components/parameters/Brn" }]
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Company" } } } }
@@ -35,8 +45,9 @@ paths:
     get:
       summary: Monthly employment series
       description: |
-        Costs 5 credits. Month-by-month National Pension subscriber counts with
-        hires and separations. Subscriber counts are payroll records; they exclude
+        Costs 1,000 credits. Month-by-month National Pension subscriber counts with
+        hires and separations. The company record's `employment_series` says in advance
+        whether this returns anything; a company without one returns 404 and costs nothing. Subscriber counts are payroll records; they exclude
         subscribers aged 60 and over and include registered directors, so they differ
         from the Employment Insurance figure by design.
       parameters: [{ $ref: "#/components/parameters/Brn" }]
@@ -44,23 +55,19 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EmploymentSeries" } } } }
         "402": { $ref: "#/components/responses/InsufficientCredits" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /companies/{brn}/worksites:
-    get:
-      summary: Worksite list
-      description: Costs 3 credits. Registered worksites with addresses and per-site employee counts.
-      parameters: [{ $ref: "#/components/parameters/Brn" }]
-      responses:
-        "200": { description: OK }
-        "402": { $ref: "#/components/responses/InsufficientCredits" }
-        "404": { description: This company has one registered worksite }
   /search:
     get:
       summary: Find companies
       description: >
-        Returns full company records matching the filters, ordered by employees.
-        **1 credit per row returned** — `limit` controls the bill. Use `count_only=true`
-        to see how many match for 1 credit, before pulling rows. Filters combine with AND;
+        Returns full company records matching the filters, ordered by employees
+        (largest first, ties broken by registration number).
+        **100 credits per row returned** — `limit` controls the bill. Use `count_only=true`
+        to see how many match for 100 credits, before pulling rows. Filters combine with AND;
         an unknown value returns 400 rather than an empty result.
+
+        A page of `limit` rows comes back with `next_cursor`; send it as `cursor` to
+        continue. A response without `next_cursor` is the last page. Paging costs the
+        same as one large call — 100 credits per row either way.
       parameters:
         - { name: name, in: query, description: "English, romanized or Korean. The legal form (주식회사 / Co., Ltd.) is ignored.", schema: { type: string, minLength: 2 } }
         - { name: brn, in: query, schema: { type: string, pattern: "^\\d{10}$" } }
@@ -70,9 +77,10 @@ paths:
         - { name: status, in: query, schema: { type: string, enum: [active, suspended, closed] } }
         - { name: established_from, in: query, schema: { type: string, pattern: "^\\d{4}$" } }
         - { name: established_to, in: query, schema: { type: string, pattern: "^\\d{4}$" } }
-        - { name: has, in: query, description: "Comma-separated: pension_series, crno, contact, listed.", schema: { type: string } }
-        - { name: limit, in: query, description: "Rows to return. Each row costs 1 credit.", schema: { type: integer, default: 10, maximum: 10000 } }
-        - { name: count_only, in: query, description: "Return only the match count. Costs 1 credit.", schema: { type: boolean } }
+        - { name: has, in: query, description: "Comma-separated: pension_series, crno, contact, listed, sites. `sites` means more than one worksite address.", schema: { type: string } }
+        - { name: limit, in: query, description: "Rows to return. Each row costs 100 credits. Values above the maximum are clamped, not rejected.", schema: { type: integer, default: 10, maximum: 1000 } }
+        - { name: cursor, in: query, description: "The `next_cursor` of the previous page. Omit for the first page.", schema: { type: string } }
+        - { name: count_only, in: query, description: "Return only the match count. Costs 100 credits.", schema: { type: boolean } }
       responses:
         "200":
           description: OK
@@ -82,17 +90,84 @@ paths:
                 type: object
                 properties:
                   returned: { type: integer }
-                  total: { type: integer, description: "Only when count_only=true." }
+                  total: { type: integer, description: "Only when count_only=true. Row responses do not carry a total." }
                   results: { type: array, items: { $ref: "#/components/schemas/Company" } }
+                  next_cursor: { type: string, description: "Present only when the page is full. Pass as `cursor` for the next page." }
                   credits_spent: { type: integer }
                   credits_remaining: { type: integer }
-        "400": { description: "Unknown filter value. The message names what is accepted." }
+        "400": { description: "Unknown filter value, or a malformed `cursor`. The message names what is accepted." }
         "402": { $ref: "#/components/responses/InsufficientCredits" }
+  /addresses:
+    get:
+      summary: Verified English address
+      description: |
+        The Korean government's own English form of a Korean road address, from the
+        Ministry of the Interior and Safety. **Free** — 0 credits — but a key is required.
+
+        Send the address in Korean or already romanised. It must identify **one** address:
+        a road name without a building number matches every building on that road and
+        returns `409` with candidates rather than an arbitrary pick. An address the
+        register cannot resolve returns `404` rather than a guess — this endpoint never
+        falls back to a rule.
+      parameters:
+        - name: q
+          in: query
+          required: true
+          description: A Korean road address, in Korean or romanised. 200 characters or fewer.
+          schema: { type: string, maxLength: 200 }
+      responses:
+        "200":
+          description: Exactly one address matched
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  query: { type: string }
+                  address_en: { type: string, description: "Official English form" }
+                  address_ko: { type: string, description: "The register's canonical Korean form, which may differ from what you sent" }
+                  postal_code: { type: string }
+                  source: { type: string, enum: [mois_official] }
+                  credits_charged: { type: integer, enum: [0] }
+        "400": { description: "`q` missing or longer than 200 characters" }
+        "404": { description: "The register has no match. Not charged, and not approximated" }
+        "409":
+          description: More than one address matched. Narrow the query.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error: { $ref: "#/components/schemas/Error" }
+                  total_matches: { type: integer }
+                  candidates:
+                    type: array
+                    description: Up to 10, in register order. Not ranked by relevance.
+                    items:
+                      type: object
+                      properties:
+                        address_en: { type: string }
+                        address_ko: { type: string }
+                        postal_code: { type: string }
+                  candidates_note: { type: string }
+        "502": { description: "The address register did not respond, or rejected the request" }
   /me:
     get:
       summary: Credit balance
+      description: What is left. Free — 0 credits.
       responses:
-        "200": { description: OK }
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  credits: { type: integer, description: "Usable now — purchased plus unexpired free" }
+                  paid: { type: integer, description: "Purchased. Does not expire" }
+                  free: { type: integer, description: "Signup allowance left; 0 once expired" }
+                  free_expires_at: { type: [integer, "null"], description: "Unix seconds, or null when no unexpired free balance" }
+                  disclaimer: { type: string }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, description: "API key. `Authorization: Bearer kcid_…`" }
@@ -132,7 +207,12 @@ components:
             `official` — registered English name from the Financial Services Commission.
             `generated` — romanized from Korean by rule. Not an officially registered name.
         corporate_registration_no: { type: string }
-        business_status: { type: string, description: From the National Tax Service }
+        business_status: { type: string, description: "From the National Tax Service, in Korean as recorded." }
+        status:
+          type: string
+          enum: [active, suspended, closed, unknown]
+          description: English reading of `business_status`. The Korean original is kept alongside it.
+        closed_date: { type: string, format: date, description: Present for closed businesses }
         established_date: { type: string, format: date }
         established_date_source:
           type: string
@@ -143,17 +223,60 @@ components:
         ksic_code: { type: string }
         ksic_name_en: { type: string, description: Statistics Korea KSIC 11th, official English }
         address_en: { type: string, description: Rendered to the Korean government English format }
+        address_ko: { type: string }
+        sido: { type: string, description: Province }
+        sigungu: { type: string, description: City or district }
+        postal_code: { type: string }
+        phone: { type: string }
+        homepage: { type: string }
+        listing_market:
+          type: string
+          enum: [KOSPI, KOSDAQ, KONEX]
+          description: Absent when the company is not listed. Unlisted is never reported as a market.
+        dart_corp_code: { type: string, description: DART filer code }
         ei_workers: { type: integer, description: Employment Insurance, annual }
-        nps_latest: { type: integer, description: National Pension subscribers }
+        site_count:
+          type: integer
+          description: >
+            Worksite addresses the company has. `sites` lists at most 20 of them, largest
+            first, so a shorter list with a higher count means it was cut.
+        sites:
+          type: array
+          description: >
+            One entry per address. The source records insurance registrations, several of
+            which can sit at one address; they are merged and their headcounts added.
+          items:
+            type: object
+            properties:
+              name: { type: string, description: Registered name of the site }
+              address_en: { type: string }
+              address_ko: { type: string }
+              employees: { type: integer, description: Employment Insurance enrollees at this address }
+              industry: { type: string, description: KSIC name in English, which can differ from the company's }
+              postal_code: { type: string }
+        employment_series:
+          type: boolean
+          description: >
+            Whether `/companies/{brn}/employment` will return a series for this company.
+            Always present. Use this rather than `nps_latest`, which is only the most recent
+            month observed and is absent for a company whose records stop earlier.
+        nps_latest: { type: integer, description: National Pension subscribers in the most recent month, if observed then }
         nps_period: { type: string, description: Observation month of nps_latest }
+        nps_delta_12m: { type: integer, description: Change in subscribers over 12 months }
+        nps_names_matched: { type: integer }
+        nps_names_total: { type: integer, description: Worksites summed against worksites found. Read with nps_quality. }
         nps_quality:
           type: string
           enum: [clean, review, contaminated, unknown]
           description: |
             Aggregation quality when a company has several worksites. `clean` means no
             sign of over-collection; it is not a verification.
-        sources: { type: object, additionalProperties: { type: string } }
+        credits_remaining: { type: integer, description: "Single-record responses only." }
         disclaimer: { type: string }
+
+      description: >
+        Null and empty fields are omitted rather than returned as null —
+        an absent field means the value is absent.
     EmploymentSeries:
       type: object
       properties:

@@ -3,7 +3,7 @@
   "name": "io.github.lichtsalz/korea-data",
   "title": "Korea Company Data",
   "description": "Korean company identity, registration status and monthly payroll-based employment, in English.",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "websiteUrl": "https://notonlystock.com/korea/",
   "repository": {
     "url": "https://github.com/lichtsalz/korea-data",
@@ -13,14 +13,14 @@
     {
       "registryType": "npm",
       "identifier": "korea-data-mcp",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
           "name": "KCID_API_KEY",
-          "description": "API key from https://notonlystock.com/korea/account — new accounts start with 50 free credits.",
+          "description": "API key from https://notonlystock.com/korea/account — new accounts start with 5,000 free credits.",
           "isRequired": true,
           "isSecret": true
         }

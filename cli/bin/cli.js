@@ -62,7 +62,15 @@ async function show(brn) {
   if (c.nps_latest != null) {
     line("", c.nps_latest.toLocaleString(), `National Pension, ${c.nps_period}`);
   }
-  line("Worksites", c.worksite_count);
+  // 2026-08-25 `worksite_count`(등록 건수) → `site_count`(주소 수). 사업장이 여럿이면
+  // 인원 많은 순으로 몇 곳을 보여준다 — 어디에 사람이 있는지가 이 데이터의 값이다
+  if (c.site_count > 1) {
+    line("Worksites", c.site_count, "addresses");
+    for (const s of (c.sites || []).slice(0, 3)) {
+      line("", `${(s.employees ?? 0).toLocaleString().padStart(7)}  ${s.address_en || s.address_ko || ""}`);
+    }
+    if (c.site_count > 3) line("", `… ${c.site_count - 3} more`);
+  }
   line("Phone", c.phone);
   line("Website", c.homepage);
   console.log("");
@@ -133,14 +141,14 @@ const HELP = `
     korea brn 124-81-29001                  one company by registration number
     korea search "samsung electronics"      by name
     korea search --industry 26 --size 1000+ by filter
-    korea search --industry 26 --count-only how many match (1 credit)
+    korea search --industry 26 --count-only how many match (100 credits)
     korea me                                credit balance
 
   ${B("Filters")}  --name --brn --industry --region --size --status
             --established-from --established-to --has --limit
 
   Set ${B("KCID_API_KEY")}. Get a key at https://notonlystock.com/korea/account
-  — new accounts start with 50 free credits.
+  — new accounts start with 5,000 free credits.
 `;
 
 const argv = process.argv.slice(2);
