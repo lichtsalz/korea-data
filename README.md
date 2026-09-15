@@ -1,5 +1,13 @@
 # Korea Company Data — developer kit
 
+> **Paused — data available on request.** The REST API, the MCP server and sign-up are switched
+> off for now, so the CLI and MCP server here cannot fetch anything at the moment.
+> The data is not gone: **it can be provided on request.** Email
+> [support@notonlystock.com](mailto:support@notonlystock.com) with what you need — which companies
+> or rail data, which fields, and in what form — or leave a note on the
+> [feedback page](https://dataservice.notonlystock.com/korea/feedback).
+> The data guide and API reference stay up, and existing keys and credits are kept for when the API reopens.
+
 Korean company records in English: identity, registration status, industry, address,
 and **month-by-month employment from government payroll records**.
 
@@ -14,7 +22,7 @@ Three ways in, one API key.
 | **[`korea-data-mcp`](mcp/)** | MCP server for agents |
 | **[`openapi.yaml`](openapi.yaml)** | REST API description |
 
-Get a key at **https://dataservice.notonlystock.com/korea/account** — 5,000 free credits, no card.
+Keys are issued at **https://dataservice.notonlystock.com/korea/account** once the API reopens — 5,000 free credits, no card.
 
 ## What is in the data
 
