@@ -11,12 +11,12 @@
  */
 import { createInterface } from "node:readline";
 
-const ENDPOINT = process.env.KCID_MCP_URL || "https://notonlystock.com/korea/mcp";
+const ENDPOINT = process.env.KCID_MCP_URL || "https://dataservice.notonlystock.com/korea/mcp";
 const KEY = process.env.KCID_API_KEY;
 
 if (!KEY) {
   process.stderr.write(
-    "korea-data-mcp: set KCID_API_KEY. Get a key at https://notonlystock.com/korea/account\n",
+    "korea-data-mcp: set KCID_API_KEY. Get a key at https://dataservice.notonlystock.com/korea/account\n",
   );
   process.exit(1);
 }

@@ -1,6 +1,6 @@
 # korea-data
 
-Korean company data from the command line — in English.
+Korean company and rail data from the command line — in English.
 
 ```console
 $ npx korea-data brn 124-81-00998
@@ -47,6 +47,8 @@ $ npx korea-data search --industry 26 --count-only
 |---|---|
 | `korea-data brn <number>` | One company by 10-digit registration number |
 | `korea-data search [name] [filters]` | Find companies |
+| `korea-data rail <name\|stop_id>` | Rail stations by name, or departures from a station |
+| `korea-data holidays <year\|date>` | Every public holiday in a year, or whether one date is a business day |
 | `korea-data me` | Credit balance |
 
 **Filters** — `--name` `--brn` `--industry` `--region` `--size` `--status`
@@ -59,7 +61,7 @@ An unknown value is an error naming what is accepted — **a typo never looks li
 
 ## Setup
 
-Get a key at **https://notonlystock.com/korea/account** — new accounts start with
+Get a key at **https://dataservice.notonlystock.com/korea/account** — new accounts start with
 5,000 free credits, no card.
 
 ```console
@@ -74,12 +76,12 @@ $ export KCID_API_KEY=kcid_...
 | **National Pension** | Monthly subscribers. Excludes those aged 60 and over and includes registered directors, so it differs from the insurance figure **by design**. |
 
 Every value is a government record as of the date shown — not an estimate, and not an
-assessment of any company. [What is in the data →](https://notonlystock.com/korea/data)
+assessment of any company. [What is in the data →](https://dataservice.notonlystock.com/korea/data)
 
 ## Cost
 
 100 credits per company, 100 per search row, 100 for a count, 1,000 for an employment series.
-[Pricing →](https://notonlystock.com/korea/pricing)
+[Pricing →](https://dataservice.notonlystock.com/korea/pricing)
 
 Also: **MCP server** for agents — [`korea-data-mcp`](https://www.npmjs.com/package/korea-data-mcp)
 

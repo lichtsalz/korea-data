@@ -1,7 +1,7 @@
 {
   "name": "korea-data",
-  "version": "0.1.3",
-  "description": "Korean company data in English from the command line — identity, registration status and payroll-based employment.",
+  "version": "0.2.2",
+  "description": "Korean company and rail data in English from the command line — company identity, payroll-based employment, and nationwide subway and commuter-rail timetables.",
   "keywords": [
     "korea",
     "korean",
@@ -11,9 +11,14 @@
     "kyc",
     "supplier",
     "cli",
-    "open-data"
+    "open-data",
+    "rail",
+    "subway",
+    "gtfs",
+    "transit",
+    "timetable"
   ],
-  "homepage": "https://notonlystock.com/korea/",
+  "homepage": "https://dataservice.notonlystock.com/korea/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lichtsalz/korea-data.git",

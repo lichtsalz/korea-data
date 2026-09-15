@@ -1,7 +1,7 @@
 {
   "name": "korea-data-mcp",
-  "version": "0.1.3",
-  "description": "MCP server for Korean company data — identity, registration status and month-by-month employment from government payroll records.",
+  "version": "0.2.2",
+  "description": "MCP server for Korean company and rail data — company identity, registration status, month-by-month employment from government payroll records, and nationwide subway and commuter-rail timetables in GTFS shape.",
   "keywords": [
     "mcp",
     "modelcontextprotocol",
@@ -11,9 +11,14 @@
     "brn",
     "supplier",
     "diligence",
-    "open-data"
+    "open-data",
+    "rail",
+    "subway",
+    "gtfs",
+    "transit",
+    "timetable"
   ],
-  "homepage": "https://notonlystock.com/korea/",
+  "homepage": "https://dataservice.notonlystock.com/korea/",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/lichtsalz/korea-data.git",

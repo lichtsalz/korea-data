@@ -1,37 +1,54 @@
 openapi: 3.1.0
 info:
-  title: Korea Company Data API
-  version: 0.0.1
+  title: Korea Data API
+  version: "0"
   description: |
     Korean corporate identity and employment records, in English.
 
     **v0 is unstable.** Paths, parameters and field names may change without notice
     until v1. Pin nothing you cannot change.
 
-    **Most endpoints cost credits.** `/me` and `/addresses` are free. New accounts
+    **Every endpoint that returns data costs credits.** `/me` is free. New accounts
     receive free credits, good for 14 days; purchased credits do not expire.
 
     **Calls that spend credits are not rate limited** — your credits are the limit.
     Calls that spend nothing are capped at 1,000 a day per key and return
-    `429 free_call_cap` past that.
+    `429 daily_call_cap` past that; `/addresses` is capped too, because it queries a
+    government register live.
+
+    **Server-side only.** No `Access-Control-*` headers are sent, so a browser page cannot
+    call this API directly. Keep the key on your server.
+
+    **Two names for the same number.** Company responses report `credits_spent`; rail and
+    address responses report `credits_charged`. This will be one name before v1.
 
     Figures are government records as of the dates shown, not estimates. This API
     states facts; it makes no assessment of any company. Where a value could be read
     as more than it is, a companion field says what kind of value it is —
     `name_en_class`, `established_date_source`, `nps_quality`. Which source each field
-    comes from is listed in the [data guide](https://notonlystock.com/korea/data).
+    comes from is listed in the [data guide](https://dataservice.notonlystock.com/korea/data).
 
     **Coverage** — 152,367 Korean for-profit corporate headquarters with 10 or more
     employees, identified through employment-insurance workplace records as of 2025-12-31.
+
+    **Every dataset shares one key**: company records, nationwide rail and address
+    conversion. Company search is
+    `/companies/search` — the bare `/search` it replaced returns `404 moved`.
+
+    **Rail** — every subway and commuter-rail stop, route and departure in South Korea,
+    every operator reconciled into one GTFS-shaped dataset. `/transit/version`,
+    `/transit/operators` and `/transit/calendar` are free; everything else is 1 credit
+    per row returned.
   license:
     name: Proprietary
 servers:
-  - url: https://notonlystock.com/korea/api/v0
+  - url: https://dataservice.notonlystock.com/korea/api/v0
 security:
   - bearerAuth: []
 paths:
   /companies/{brn}:
     get:
+      operationId: getCompany
       summary: Company record
       description: >
         Costs 100 credits. Identity, status, industry, address, latest employee counts, and
@@ -41,8 +58,12 @@ paths:
       responses:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/Company" } } } }
         "404": { $ref: "#/components/responses/NotFound" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
   /companies/{brn}/employment:
     get:
+      operationId: getEmploymentSeries
       summary: Monthly employment series
       description: |
         Costs 1,000 credits. Month-by-month National Pension subscriber counts with
@@ -55,8 +76,11 @@ paths:
         "200": { description: OK, content: { application/json: { schema: { $ref: "#/components/schemas/EmploymentSeries" } } } }
         "402": { $ref: "#/components/responses/InsufficientCredits" }
         "404": { $ref: "#/components/responses/NotFound" }
-  /search:
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /companies/search:
     get:
+      operationId: searchCompanies
       summary: Find companies
       description: >
         Returns full company records matching the filters, ordered by employees
@@ -65,11 +89,19 @@ paths:
         to see how many match for 100 credits, before pulling rows. Filters combine with AND;
         an unknown value returns 400 rather than an empty result.
 
+        **At least one of `name`, `q`, `brn`, `industry`, `region`, `size`, `status` or `has`
+        is required** — a call with none of them returns `400 bad_query`. A year range alone
+        (`established_from` / `established_to`) does not satisfy it.
+
+        `count_only=true` is charged whatever the count, **including zero** — it is the one
+        call that costs credits without returning rows.
+
         A page of `limit` rows comes back with `next_cursor`; send it as `cursor` to
         continue. A response without `next_cursor` is the last page. Paging costs the
         same as one large call — 100 credits per row either way.
       parameters:
         - { name: name, in: query, description: "English, romanized or Korean. The legal form (주식회사 / Co., Ltd.) is ignored.", schema: { type: string, minLength: 2 } }
+        - { name: q, in: query, description: "Alias for `name`. If both are sent, `name` wins.", schema: { type: string } }
         - { name: brn, in: query, schema: { type: string, pattern: "^\\d{10}$" } }
         - { name: industry, in: query, description: "KSIC code by prefix. 26 = division, 26299 = exact class.", schema: { type: string, pattern: "^\\d{1,5}$" } }
         - { name: region, in: query, description: "Province (sido) or city/district (sigungu).", schema: { type: string } }
@@ -90,19 +122,24 @@ paths:
                 type: object
                 properties:
                   returned: { type: integer }
-                  total: { type: integer, description: "Only when count_only=true. Row responses do not carry a total." }
+                  total: { type: integer, description: "Present when count_only=true, and on a zero-row response, where it is always 0." }
                   results: { type: array, items: { $ref: "#/components/schemas/Company" } }
                   next_cursor: { type: string, description: "Present only when the page is full. Pass as `cursor` for the next page." }
                   credits_spent: { type: integer }
                   credits_remaining: { type: integer }
         "400": { description: "Unknown filter value, or a malformed `cursor`. The message names what is accepted." }
         "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
   /addresses:
     get:
+      operationId: convertAddress
       summary: Verified English address
       description: |
         The Korean government's own English form of a Korean road address, from the
-        Ministry of the Interior and Safety. **Free** — 0 credits — but a key is required.
+        Ministry of the Interior and Safety. **1 credit**, charged only when exactly one address
+        comes back. Capped at 1,000 calls a day per key even though it costs credits — it queries
+        the government register live, so the cap protects that register, not our capacity.
 
         Send the address in Korean or already romanised. It must identify **one** address:
         a road name without a building number matches every building on that road and
@@ -128,7 +165,8 @@ paths:
                   address_ko: { type: string, description: "The register's canonical Korean form, which may differ from what you sent" }
                   postal_code: { type: string }
                   source: { type: string, enum: [mois_official] }
-                  credits_charged: { type: integer, enum: [0] }
+                  credits_charged: { type: integer, enum: [1] }
+                  credits_remaining: { type: integer }
         "400": { description: "`q` missing or longer than 200 characters" }
         "404": { description: "The register has no match. Not charged, and not approximated" }
         "409":
@@ -151,8 +189,331 @@ paths:
                         postal_code: { type: string }
                   candidates_note: { type: string }
         "502": { description: "The address register did not respond, or rejected the request" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /holidays:
+    get:
+      operationId: listHolidays
+      summary: Korean public holidays for a year or date range
+      description: |
+        Every Korean public holiday, **with English names**. **1 credit per call**, not per row —
+        a whole year costs the same as one date, because both are one read of a table compiled
+        into the worker. Nothing is charged unless an answer comes back.
+
+        Korean holidays cannot be computed. Lunar New Year, Chuseok and Buddha's Birthday
+        follow the lunar calendar; temporary holidays and election days are declared as they
+        are decided; and the statutory list itself changes by law — Constitution Day and
+        Labor Day both became public holidays again in 2026. The table therefore comes from
+        the Korea Astronomy and Space Science Institute, the body that publishes the official
+        calendar, and is cross-checked date-for-date against an independent implementation.
+
+        Substitute holidays carry **what they substitute for**, which the source only started
+        stating in 2024; earlier ones are derived and the derivation is verified against the
+        annotated ones. A date can carry two holidays, and one substitute day can stand in for
+        two of them — 2025-05-06 substitutes both Children's Day and Buddha's Birthday.
+      parameters:
+        - name: year
+          in: query
+          description: A four-digit year within the published coverage. Use this or `from`/`to`.
+          schema: { type: integer, minimum: 2004, maximum: 2028 }
+        - name: from
+          in: query
+          description: Start of the range, `YYYY-MM-DD`. Required with `to`.
+          schema: { type: string, format: date }
+        - name: to
+          in: query
+          description: End of the range, inclusive, `YYYY-MM-DD`.
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: Holidays in the requested window
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  from: { type: string, format: date }
+                  to: { type: string, format: date }
+                  count: { type: integer, description: "Number of dates, not rows. A date can carry two holidays." }
+                  holidays:
+                    type: array
+                    items: { $ref: "#/components/schemas/Holiday" }
+                  coverage: { $ref: "#/components/schemas/HolidayCoverage" }
+                  source: { type: string }
+        "400": { description: "Neither `year` nor a valid `from`/`to` pair was given. Not charged." }
+        "404": { description: "The year is outside the published coverage. This API does not guess, and does not charge for saying so." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /holidays/{date}:
+    get:
+      operationId: getHolidayDate
+      summary: Whether one date is a Korean business day
+      description: |
+        One date, answered directly: is it a holiday, is it a weekend, is it a business day —
+        and, because answering those needs the whole table anyway, the previous and next
+        business day and the next holiday. **1 credit**, charged only on an answer.
+
+        A date outside the published coverage returns **404, not `is_holiday: false`**.
+        Answering "not a holiday" for a year we do not hold would be a guess presented as a
+        measurement, and payroll and settlement code believes this field.
+      parameters:
+        - name: date
+          in: path
+          required: true
+          description: "`YYYY-MM-DD`. Must be a real calendar date — 2026-02-31 is rejected."
+          schema: { type: string, format: date }
+      responses:
+        "200":
+          description: The date, classified
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  date: { type: string, format: date }
+                  weekday: { type: string, example: Wednesday }
+                  is_holiday: { type: boolean }
+                  is_weekend: { type: boolean }
+                  is_business_day: { type: boolean, description: "Neither a public holiday nor a weekend" }
+                  holidays:
+                    type: array
+                    description: Empty when the date is not a holiday. Two entries when two fall on it.
+                    items: { $ref: "#/components/schemas/Holiday" }
+                  previous_business_day:
+                    type: string
+                    format: date
+                    nullable: true
+                    description: "`null` when stepping back would leave the published coverage."
+                  next_business_day:
+                    type: string
+                    format: date
+                    nullable: true
+                    description: "The next date that is neither a weekend nor a holiday. `null` at the edge of coverage — counting past the table would mean counting without knowing the holidays."
+                  next_holiday:
+                    nullable: true
+                    allOf:
+                      - $ref: "#/components/schemas/Holiday"
+                      - type: object
+                        properties:
+                          days_away: { type: integer }
+                  coverage: { $ref: "#/components/schemas/HolidayCoverage" }
+                  source: { type: string }
+        "400": { description: "Not a calendar date. Not charged." }
+        "404": { description: "Outside the published coverage. Not charged." }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+        "503": { $ref: "#/components/responses/Unavailable" }
+  /transit/version:
+    get:
+      operationId: getTransitVersion
+      summary: Rail dataset version and row counts
+      description: |
+        **Free — 0 credits.** Services that use this data pull it once and serve from their own
+        store; that only works if you can tell whether anything changed. Row counts are recorded
+        at load time, not counted per call.
+
+        While a load is in progress this returns `{}` and every paid `/transit/*` endpoint
+        returns `503 loading` without charging.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    version: { type: string }
+                    rows: { type: integer }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/operators:
+    get:
+      operationId: listOperators
+      summary: Rail operators
+      description: "**Free — 0 credits.** Every agency and how many routes each runs."
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  operators:
+                    type: array
+                    items: { $ref: "#/components/schemas/Operator" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/calendar:
+    get:
+      operationId: getCalendar
+      summary: Service patterns and dated exceptions
+      description: |
+        **Free — 0 credits.** Weekday patterns plus every dated exception, including public
+        holidays. You need this to interpret any row you buy: a timetable that cannot say
+        *which days a train runs* is not a timetable.
+
+        `exception_type` is `1` (runs that date) or `2` (does not run that date). Korean
+        operators publish separate weekday, Saturday and holiday timetables and label them
+        inconsistently; those labels are reconciled per operator before publication.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  services: { type: array, items: { type: object } }
+                  exceptions: { type: array, items: { type: object } }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/stops:
+    get:
+      operationId: listStops
+      summary: Rail stations
+      description: |
+        Every subway and commuter-rail station, with WGS84 coordinates and English names.
+        **1 credit per row returned** — an empty page costs nothing.
+
+        A station served by more than one line appears once per line, joined by a shared
+        `parent_station`. Rows with `location_type: 1` are those parent stations.
+
+        Three name fields, because display and matching are different jobs: `stop_name` as
+        published, `stop_name_short` with the parenthesised subtitle removed, and
+        `stop_name_norm` — subtitle, spaces, hyphens and case stripped. The source is not
+        consistent about any of them, which is exactly why the normalised key exists.
+      parameters:
+        - name: q
+          in: query
+          description: |
+            Station name in English or Korean. Partial names match, and a **normalised join
+            key** is matched exactly — send `Mok-dong` and you get `Mokdong`, send a name with
+            its parenthesised subtitle and it still matches. Omit to page through everything.
+          schema: { type: string }
+        - name: limit
+          in: query
+          description: Rows per page, up to 1,000. Default 100. This is what you are billed for.
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: cursor
+          in: query
+          description: The `next_cursor` from the previous page.
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/StopPage" }
+        "400": { $ref: "#/components/responses/BadCursor" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "503": { $ref: "#/components/responses/Loading" }
+
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/stops/{stop_id}:
+    get:
+      operationId: getStop
+      summary: One rail station
+      description: |
+        **1 credit.** Not charged when the station does not exist.
+
+        Returned as a **one-row page**, not a bare object — the same envelope as
+        `/transit/stops`, with `rows` holding a single element and `next_cursor: null`.
+      parameters:
+        - name: stop_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/StopPage" }
+        "400": { $ref: "#/components/responses/BadCursor" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Loading" }
+
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/stops/{stop_id}/departures:
+    get:
+      operationId: listDepartures
+      summary: Departures from a station
+      description: |
+        Every scheduled departure, in time order. **1 credit per row returned.**
+
+        Times follow the GTFS convention and **may exceed 24 hours** — a train leaving at 1am
+        the next service day reads `25:00:00`. Ask a `parent_station` and you get every
+        line's departures. Which dates each `service_id` runs is in `/transit/calendar`.
+      parameters:
+        - name: stop_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/DeparturePage" }
+        "400": { $ref: "#/components/responses/BadCursor" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Loading" }
+
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/routes:
+    get:
+      operationId: listRoutes
+      summary: Rail routes
+      description: "**1 credit per row returned.**"
+      parameters:
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/RoutePage" }
+        "400": { $ref: "#/components/responses/BadCursor" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "503": { $ref: "#/components/responses/Loading" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
+  /transit/routes/{route_id}/trips:
+    get:
+      operationId: listTrips
+      summary: Trains on a route
+      description: "**1 credit per row returned.** Each trip carries the `service_id` that says which days it runs."
+      parameters:
+        - name: route_id
+          in: path
+          required: true
+          schema: { type: string }
+        - name: limit
+          in: query
+          schema: { type: integer, default: 100, maximum: 1000 }
+        - name: cursor
+          in: query
+          schema: { type: string }
+      responses:
+        "200": { $ref: "#/components/responses/TripPage" }
+        "400": { $ref: "#/components/responses/BadCursor" }
+        "402": { $ref: "#/components/responses/InsufficientCredits" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "503": { $ref: "#/components/responses/Loading" }
+
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
   /me:
     get:
+      operationId: getBalance
       summary: Credit balance
       description: What is left. Free — 0 credits.
       responses:
@@ -168,6 +529,8 @@ paths:
                   free: { type: integer, description: "Signup allowance left; 0 once expired" }
                   free_expires_at: { type: [integer, "null"], description: "Unix seconds, or null when no unexpired free balance" }
                   disclaimer: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "429": { $ref: "#/components/responses/DailyCallCap" }
 components:
   securitySchemes:
     bearerAuth: { type: http, scheme: bearer, description: "API key. `Authorization: Bearer kcid_…`" }
@@ -179,6 +542,70 @@ components:
       description: 10-digit business registration number
       schema: { type: string, pattern: "^\\d{10}$" }
   responses:
+    Unauthorized:
+      description: "`missing_key` — no `Authorization: Bearer` header, or `invalid_key` — revoked or unknown"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    DailyCallCap:
+      description: >
+        `daily_call_cap` — this key's 1,000-a-day cap on calls that spend nothing, which
+        `/addresses` is also counted against. Credit-spending calls are unaffected.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    BadCursor:
+      description: "`bad_cursor` — not a value we returned as `next_cursor`. Not charged"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Loading:
+      description: >
+        `loading` — a new timetable is mid-load, so every paid `/transit/*` call is refused
+        while the three free calls keep answering. Not charged.
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    Unavailable:
+      description: "`unavailable` — the government register we call is down. Not charged"
+      content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
+    StopPage:
+      description: A page of stop rows. Charged per row returned; an empty page is free.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/TransitPage"
+              - type: object
+                properties:
+                  rows: { type: array, items: { $ref: "#/components/schemas/Stop" } }
+    RoutePage:
+      description: A page of route rows. Charged per row returned; an empty page is free.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/TransitPage"
+              - type: object
+                properties:
+                  rows: { type: array, items: { $ref: "#/components/schemas/Route" } }
+    TripPage:
+      description: A page of trip rows. Charged per row returned; an empty page is free.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/TransitPage"
+              - type: object
+                properties:
+                  rows: { type: array, items: { $ref: "#/components/schemas/Trip" } }
+    DeparturePage:
+      description: A page of departure rows. Charged per row returned; an empty page is free.
+      content:
+        application/json:
+          schema:
+            allOf:
+              - $ref: "#/components/schemas/TransitPage"
+              - type: object
+                properties:
+                  rows: { type: array, items: { $ref: "#/components/schemas/Departure" } }
+    TransitPage:
+      description: A page of rail rows. Charged per row returned; an empty page is free.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/TransitPage" }
     NotFound:
       description: No record for this business registration number
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
@@ -186,6 +613,96 @@ components:
       description: Not enough credits
       content: { application/json: { schema: { $ref: "#/components/schemas/Error" } } }
   schemas:
+    Holiday:
+      type: object
+      properties:
+        date: { type: string, format: date }
+        name_ko: { type: string, description: "Normalised Korean name. The source's own spelling drifted — 신정/1월1일, 석가탄신일/부처님오신날 — and one year carries a typo." }
+        name_en: { type: string, description: "Added by kcid. The source publishes Korean only." }
+        kind:
+          type: string
+          enum: [public, substitute, temporary, election]
+          description: "`temporary` holidays are declared ad hoc; `election` days are statutory holidays under the Public Official Election Act."
+        substitutes:
+          type: object
+          description: Present only on substitute holidays.
+          properties:
+            ko: { type: string }
+            en: { type: string }
+    HolidayCoverage:
+      type: object
+      description: The years the table holds. Outside this, requests are refused rather than guessed.
+      properties:
+        first_year: { type: integer }
+        last_year: { type: integer }
+    TransitPage:
+      type: object
+      description: >
+        Every paid `/transit/*` endpoint answers in this shape, including the single-station
+        one, which returns exactly one element with `next_cursor: null`. A zero-row page omits
+        `credits_charged` and `credits_remaining` because nothing was charged.
+      required: [rows, next_cursor]
+      properties:
+        rows: { type: array, items: { type: object } }
+        next_cursor:
+          type: [string, "null"]
+          description: Send as `cursor` for the next page. `null` means this was the last page.
+        credits_charged: { type: integer, description: One per row returned }
+        credits_remaining: { type: integer }
+    Operator:
+      type: object
+      properties:
+        agency_id: { type: string }
+        agency_name: { type: string }
+        routes: { type: integer, description: How many routes this operator runs }
+    Stop:
+      type: object
+      description: A station as it appears in `rows` of `/transit/stops`.
+      properties:
+        stop_id: { type: string }
+        stop_name: { type: string, description: As published }
+        stop_name_short: { type: string, description: Parenthesised subtitle removed }
+        stop_name_ko: { type: string }
+        stop_name_norm:
+          type: string
+          description: Subtitle, spaces, hyphens and case stripped — the key to join on
+        stop_lat: { type: number }
+        stop_lon: { type: number }
+        route_name: { type: string }
+        location_type:
+          type: integer
+          enum: [0, 1]
+          description: "0 a platform, 1 a parent station. Parent stations have no departures of their own"
+        parent_station: { type: string }
+    Route:
+      type: object
+      properties:
+        route_id: { type: string }
+        route_short_name: { type: string }
+        route_long_name: { type: string }
+        route_type: { type: integer, description: GTFS route type }
+        agency_id: { type: string }
+        agency_name: { type: string }
+    Trip:
+      type: object
+      properties:
+        trip_id: { type: string }
+        route_id: { type: string }
+        service_id: { type: string, description: Which days it runs — resolve with `/transit/calendar` }
+        headsign: { type: string }
+    Departure:
+      type: object
+      properties:
+        trip_id: { type: string }
+        route_id: { type: string }
+        service_id: { type: string }
+        headsign: { type: string }
+        stop_id: { type: string }
+        stop_sequence: { type: integer }
+        arrival_time:
+          type: string
+          description: "`HH:MM:SS`, and **may exceed 24 hours** — 1am on the next service day is `25:00:00`"
+        departure_time: { type: string, description: Same convention as `arrival_time` }
     Error:
       type: object
       properties:

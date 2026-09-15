@@ -3,15 +3,18 @@
 Korean company records in English: identity, registration status, industry, address,
 and **month-by-month employment from government payroll records**.
 
+Plus **nationwide rail** — every subway and commuter-rail stop, route and departure,
+eleven operators reconciled into one GTFS-shaped dataset.
+
 Three ways in, one API key.
 
 | | |
 |---|---|
-| **[`korea-data`](cli/)** | Command line — `npx korea-data 124-81-00998` |
+| **[`korea-data`](cli/)** | Command line — `npx korea-data 124-81-00998` · `npx korea-data rail 용산` |
 | **[`korea-data-mcp`](mcp/)** | MCP server for agents |
 | **[`openapi.yaml`](openapi.yaml)** | REST API description |
 
-Get a key at **https://notonlystock.com/korea/account** — 5,000 free credits, no card.
+Get a key at **https://dataservice.notonlystock.com/korea/account** — 5,000 free credits, no card.
 
 ## What is in the data
 
@@ -33,8 +36,8 @@ could be read as more than it is, a companion field says what kind of value it i
 `name_en_class`, `established_date_source`, `nps_quality`. Which source each field
 comes from is in the data guide.
 
-[Full data guide →](https://notonlystock.com/korea/data) ·
-[API docs →](https://notonlystock.com/korea/api)
+[Full data guide →](https://dataservice.notonlystock.com/korea/data) ·
+[API docs →](https://dataservice.notonlystock.com/korea/api)
 
 ## What this does not do
 
